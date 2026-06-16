@@ -180,6 +180,29 @@ export default function Home() {
   const character = characterQuery.data;
   const characters = charactersQuery.data || [];
 
+  // Derived values for timer UI (safe to compute even when character is undefined)
+  const SESSION_TOTAL = 25 * 60;
+  const sessionProgress = 1 - timeLeft / SESSION_TOTAL;
+  const RING_RADIUS = 80;
+  const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+  const ringOffset = RING_CIRCUMFERENCE * (1 - sessionProgress);
+
+  const difficultyXpMap: Record<string, number> = { easy: 10, normal: 15, hard: 20 };
+  const xpPreview = difficultyXpMap[character?.difficulty ?? "normal"] ?? 15;
+
+  const currentXp = character?.experience ?? 0;
+  const currentLevel = character?.level ?? 1;
+  const xpForNextLevel = currentLevel * 100;
+  const xpForCurrentLevel = (currentLevel - 1) * 100;
+  const xpProgress = Math.min(
+    ((currentXp - xpForCurrentLevel) / (xpForNextLevel - xpForCurrentLevel)) * 100,
+    100
+  );
+
+  const CLASS_AVATARS: Record<string, string> = { wizard: "🧙", warrior: "⚔️", archer: "🏹", priest: "🙏" };
+  const avatarEmoji = CLASS_AVATARS[character?.class ?? "wizard"] ?? "🧙";
+  const avatarScale = 1 + sessionProgress * 0.15;
+
   if (!selectedCharacterId || !character) {
     return (
       <div className="min-h-screen bg-gradient-premium p-6">
@@ -331,8 +354,16 @@ export default function Home() {
         {/* Header */}
         <div className="flex justify-between items-center mb-8 animate-slide-up">
           <div>
+            <p className="text-purple-400 text-sm font-semibold uppercase tracking-widest mb-1">
+              {CLASSES.find(c => c.name === character.class)?.label}
+            </p>
             <h1 className="text-premium-title">{character.name}</h1>
-            <p className="text-purple-300">Lv. {character.level} {CLASSES.find(c => c.name === character.class)?.label}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                Lv. {character.level}
+              </span>
+              <span className="text-purple-300 text-sm">{character.totalSessions}세션 완료</span>
+            </div>
           </div>
           <div className="flex gap-3">
             <Button
@@ -354,21 +385,33 @@ export default function Home() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 animate-slide-up">
-          <div className="stat-box">
-            <div className="stat-label">경험치</div>
-            <div className="stat-value">{character.experience}</div>
+          <div className="stat-box-enhanced col-span-2 md:col-span-1">
+            <div className="stat-label flex items-center justify-center gap-1 mb-2">❤️ 체력</div>
+            <div className="text-sm font-bold text-white mb-1">{character.health} / {character.maxHealth}</div>
+            <div className="progress-premium">
+              <div
+                className="progress-premium-fill"
+                style={{
+                  width: `${(character.health / character.maxHealth) * 100}%`,
+                  background: "linear-gradient(to right, rgb(239,68,68), rgb(251,113,133))",
+                }}
+              />
+            </div>
           </div>
-          <div className="stat-box">
-            <div className="stat-label">골드</div>
+          <div className="stat-box-enhanced col-span-2 md:col-span-1">
+            <div className="stat-label flex items-center justify-center gap-1 mb-2">✨ 경험치</div>
+            <div className="text-sm font-bold text-white mb-1">{currentXp} XP</div>
+            <div className="progress-premium">
+              <div className="progress-premium-fill" style={{ width: `${xpProgress}%` }} />
+            </div>
+          </div>
+          <div className="stat-box-enhanced">
+            <div className="stat-label">💰 골드</div>
             <div className="stat-value text-yellow-400">{character.gold}</div>
           </div>
-          <div className="stat-box">
-            <div className="stat-label">공격력</div>
+          <div className="stat-box-enhanced">
+            <div className="stat-label">⚔️ 공격력</div>
             <div className="stat-value text-red-400">{Number(character.attackPower).toFixed(1)}</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-label">방어력</div>
-            <div className="stat-value text-blue-400">{Number(character.defense).toFixed(1)}</div>
           </div>
         </div>
 
@@ -396,23 +439,146 @@ export default function Home() {
         {/* Content */}
         <div className="animate-scale-in">
           {activeTab === "game" && (
-            <Card className="card-premium p-8">
-              <div className="text-center space-y-8">
-                <div className="space-y-4">
-                  <div className="text-7xl font-bold text-gradient animate-glow-pulse">
-                    {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
+            <Card className={timerActive ? "card-timer-active p-8" : "card-premium p-8"}>
+              <div className="text-center space-y-6">
+
+                {/* Character Avatar with growth effects */}
+                <div className="flex flex-col items-center">
+                  <div
+                    className="relative inline-flex items-center justify-center"
+                    style={{ width: 128, height: 128 }}
+                  >
+                    {timerActive && (
+                      <div className="orbit-ring">
+                        <div className="orbit-dot" />
+                      </div>
+                    )}
+                    {timerActive && (
+                      <>
+                        <span className="particle" style={{ left: "20%", animationDelay: "0s",   animationDuration: "1.8s" }} />
+                        <span className="particle" style={{ left: "50%", animationDelay: "0.5s", animationDuration: "2.2s" }} />
+                        <span className="particle" style={{ left: "70%", animationDelay: "1.0s", animationDuration: "1.6s" }} />
+                        <span className="particle" style={{ left: "35%", animationDelay: "1.4s", animationDuration: "2.0s" }} />
+                      </>
+                    )}
+                    <div
+                      className={timerActive ? "avatar-active" : "avatar-idle"}
+                      style={{
+                        fontSize: "5rem",
+                        lineHeight: 1,
+                        transform: `scale(${avatarScale})`,
+                        transition: "transform 1s ease-out",
+                      }}
+                    >
+                      {avatarEmoji}
+                    </div>
                   </div>
-                  <p className="text-purple-300">집중 시간</p>
+
+                  {/* Session energy bar */}
+                  <div className="mt-5 w-48">
+                    <div className="flex justify-between text-xs text-purple-300 mb-1">
+                      <span>세션 에너지</span>
+                      <span>{Math.round(sessionProgress * 100)}%</span>
+                    </div>
+                    <div className="power-bar-track">
+                      <div className="power-bar-fill" style={{ width: `${sessionProgress * 100}%` }} />
+                    </div>
+                  </div>
                 </div>
+
+                {/* Circular timer ring */}
+                <div className="flex justify-center">
+                  <div className="relative" style={{ width: 220, height: 220 }}>
+                    <svg
+                      width="220"
+                      height="220"
+                      viewBox="0 0 220 220"
+                      style={{ transform: "rotate(-90deg)" }}
+                    >
+                      <circle
+                        cx="110" cy="110" r={RING_RADIUS}
+                        fill="none"
+                        stroke="rgba(88,28,135,0.4)"
+                        strokeWidth="12"
+                      />
+                      <defs>
+                        <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%"   stopColor="rgb(168,85,247)" />
+                          <stop offset="100%" stopColor="rgb(236,72,153)" />
+                        </linearGradient>
+                      </defs>
+                      <circle
+                        cx="110" cy="110" r={RING_RADIUS}
+                        fill="none"
+                        stroke="url(#ringGradient)"
+                        strokeWidth="12"
+                        strokeLinecap="round"
+                        strokeDasharray={RING_CIRCUMFERENCE}
+                        strokeDashoffset={ringOffset}
+                        style={{ transition: "stroke-dashoffset 1s linear" }}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-5xl font-bold text-gradient">
+                        {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
+                      </span>
+                      <span className="text-purple-300 text-sm mt-1">집중 시간</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Battle scene — visible only while timer is active */}
+                {timerActive && (
+                  <div className="flex items-center justify-center gap-6 py-1">
+                    <div className="relative">
+                      <span className="battle-char">{avatarEmoji}</span>
+                    </div>
+                    <span className="battle-slash">⚡</span>
+                    <div className="relative">
+                      <span className="battle-monster">👹</span>
+                      <span className="battle-dmg">CRIT!</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* XP preview + level bar */}
+                <div className="w-full max-w-xs mx-auto space-y-3">
+                  <div className={`flex items-center justify-center gap-2 ${timerActive ? "xp-preview-active" : ""}`}>
+                    <span className="text-2xl font-bold text-gradient">+{xpPreview} XP</span>
+                    <span className="text-purple-400 text-sm">완료 시 획득</span>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs text-purple-300 mb-1">
+                      <span>Lv. {currentLevel} 경험치</span>
+                      <span>{currentXp} / {xpForNextLevel} XP</span>
+                    </div>
+                    <div className="progress-premium">
+                      <div className="progress-premium-fill" style={{ width: `${xpProgress}%` }} />
+                    </div>
+                    {timerActive && (
+                      <p className="text-xs text-purple-400 text-right mt-1">
+                        완료 후: {Math.min(currentXp + xpPreview, xpForNextLevel)} / {xpForNextLevel} XP
+                      </p>
+                    )}
+                  </div>
+                  {timerActive && (
+                    <p
+                      className="text-sm text-purple-300 italic text-center"
+                      style={{ animation: "motiv-fade 3s ease-in-out infinite" }}
+                    >
+                      "당신도 성장중이라는 거 잊지 마세요!"
+                    </p>
+                  )}
+                </div>
+
+                {/* Start / Pause button */}
                 <Button
                   onClick={() => setTimerActive(!timerActive)}
                   className={`w-full py-6 text-lg font-semibold ${
-                    timerActive
-                      ? "bg-red-600 hover:bg-red-700"
-                      : "btn-premium"
+                    timerActive ? "bg-red-600 hover:bg-red-700" : "btn-premium"
                   }`}
                 >
-                  {timerActive ? "일시정지" : "시작"}
+                  {timerActive ? "⏸ 일시정지" : "▶ 시작"}
                 </Button>
               </div>
 
